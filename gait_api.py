@@ -477,15 +477,15 @@ def comprehensive_gait_analysis(df1, subject_demographics=None):
         'left_params': left_params
     }
 
-#Load and prepare data (you'll need to update column names based on your actual data)
-df1 = pd.read_csv('New Datasets/pranjay1.csv')
-column_names = ['CurrentTimeStamps','Time(ms)', 'M1_R(kPa)', 'M2_R(kPa)', 'Mid_R(kPa)', 'Heel_R(kPa)',
-                'M1_L(kPa)', 'M2_L(kPa)', 'Mid_L(kPa)', 'Heel_L(kPa)']
-df1.columns = column_names
+# #Load and prepare data (you'll need to update column names based on your actual data)
+# df1 = pd.read_csv('New Datasets/pranjay1.csv')
+# column_names = ['CurrentTimeStamps','Time(ms)', 'M1_R(kPa)', 'M2_R(kPa)', 'Mid_R(kPa)', 'Heel_R(kPa)',
+#                 'M1_L(kPa)', 'M2_L(kPa)', 'Mid_L(kPa)', 'Heel_L(kPa)']
+# df1.columns = column_names
 
-#Example usage:
-subject_info = {'age': 21, 'height': 169, 'weight': 95}
-results = comprehensive_gait_analysis(df1, subject_info)
+# #Example usage:
+# subject_info = {'age': 21, 'height': 169, 'weight': 95}
+# results = comprehensive_gait_analysis(df1, subject_info)
 
 
 
