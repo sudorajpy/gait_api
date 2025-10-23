@@ -572,6 +572,30 @@ DIRECT_RENAME_MAP = {
     "Right1 Heel": "Heel_R(kPa)",
 }
 
+
+
+# ---------------------------------------------------------------------
+# COLUMN RENAMING MAP - DEFINITIVE POSITIONAL MAPPING
+# ---------------------------------------------------------------------
+# This map defines the *canonical* names the Python analysis logic expects,
+# indexed by their position in the CSV file (0 to 9).
+CANONICAL_COLUMNS = [
+    # Index 0: Time
+    "CurrentTimeStamps",
+    # Index 1: Time Difference
+    "Time(ms)",
+    # Index 2-5: Left Foot
+    "M1_L(kPa)",
+    "M2_L(kPa)",
+    "Mid_L(kPa)",
+    "Heel_L(kPa)",
+    # Index 6-9: Right Foot
+    "M1_R(kPa)",
+    "M2_R(kPa)",
+    "Mid_R(kPa)",
+    "Heel_R(kPa)",
+]
+
 def find_column(df, candidates):
     for c in candidates:
         if c in df.columns:
@@ -840,194 +864,277 @@ except Exception as e:
 
 app = FastAPI()
 
+# def run_gait_analysis_core(df, age: float, height: float, weight: float, 
+#                                  peak_height: float, dynamic_threshold: float, no_dynamic: bool, column_mapping_report: dict):
+#     """
+#     Core analysis logic directly adapted from combined.py:main, minus side-effects (plotting/saving).
+#     """
+    
+#     # 1. Column Mapping and Preparation (Matching logic from original main)
+#     mapping = {}
+#     for key, cand in COLUMN_ALIASES.items():
+#         found = find_column(df, cand)
+#         mapping[key] = found
+    
+#     if mapping['time'] is None:
+#         raise ValueError("Cannot find time column. Check your CSV header for time alias.")
+    
+#     rename_map = {}
+#     rename_map[mapping['time']] = 'Time(ms)'
+#     for logical in ['M1_R','M2_R','Mid_R','Heel_R','M1_L','M2_L','Mid_L','Heel_L']:
+#         actual_col = mapping.get(logical)
+#         if actual_col is not None:
+#             canonical = logical + '(kPa)'
+#             rename_map[actual_col] = canonical
+    
+#     df = df.rename(columns=rename_map)
+    
+#     # Ensure Time(ms) numeric and handle NaNs/errors
+#     df['Time(ms)'] = pd.to_numeric(df['Time(ms)'], errors='coerce').ffill().fillna(0)
+
+#     sensor_cols = [c for c in ['M1_R(kPa)','M2_R(kPa)','Mid_R(kPa)','Heel_R(kPa)',
+#                                'M1_L(kPa)','M2_L(kPa)','Mid_L(kPa)','Heel_L(kPa)'] if c in df.columns]
+
+#     # 2. Dynamic Filtering (Matching logic from original main)
+#     df_use = df.copy()
+#     used_dynamic = False
+#     if not no_dynamic:
+#         df_use, used_dynamic = keep_dynamic(df, sensor_cols, threshold=dynamic_threshold)
+    
+#     if len(df_use) < 10:
+#         raise ValueError("Too few valid rows after data cleaning/filtering.")
+    
+#     total_time = float(df_use['Time(ms)'].iloc[-1] - df_use['Time(ms)'].iloc[0]) if len(df_use)>1 else 0.0
+
+#     # 3. Per-sensor peak statistics (Code 1/2 parameters: a,b,c type)
+#     peak_stats = compute_per_sensor_peak_stats(df_use, sensor_cols, peak_height_mult=peak_height)
+    
+#     # VALIDATION 2 (from original main logic)
+#     total_peaks = sum(v.get('peak_count', 0) for v in peak_stats.values())
+#     if total_peaks == 0:
+#         # Instead of error/exit, return with warning in results
+#         pass
+    
+#     # 4. Gait Events & Parameters (Final Code x,y,z parameters)
+#     right_params = [0,0,0,0,0,0] # Stance, Swing, Stride, Speed, Cadence, StepLength
+#     left_params  = [0,0,0,0,0,0]
+#     right_event_counts = {'heel': 0, 'toe': 0}
+#     left_event_counts = {'heel': 0, 'toe': 0}
+    
+#     # RIGHT FOOT
+#     if 'Heel_R(kPa)' in df_use.columns and 'M1_R(kPa)' in df_use.columns:
+#         heel_r_times, m1_r_releases = detect_gait_events(df_use, 'Heel_R(kPa)', 'M1_R(kPa)')
+#         right_event_counts['heel'] = len(heel_r_times)
+#         right_event_counts['toe'] = len(m1_r_releases)
+        
+#         stance_r, swing_r, stride_r = calculate_gait_parameters(heel_r_times, m1_r_releases)
+#         if stance_r and swing_r and stride_r:
+#             s_r_s = scale_to_physiological_range(stance_r, STANCE_RANGE)
+#             sw_r_s = scale_to_physiological_range(swing_r, SWING_RANGE)
+#             stride_r_s = scale_to_physiological_range(stride_r, STRIDE_RANGE)
+#             speed_r, cadence_r, step_r = calculate_spatial_temporal_params(stride_r_s, total_time)
+#             right_params = [
+#                 float(np.mean(s_r_s)) if s_r_s else 0.0,
+#                 float(np.mean(sw_r_s)) if sw_r_s else 0.0,
+#                 float(np.mean(stride_r_s)) if stride_r_s else 0.0,
+#                 speed_r, cadence_r, step_r
+#             ]
+
+#     # LEFT FOOT
+#     if 'Heel_L(kPa)' in df_use.columns and 'M1_L(kPa)' in df_use.columns:
+#         heel_l_times, m1_l_releases = detect_gait_events(df_use, 'Heel_L(kPa)', 'M1_L(kPa)')
+#         left_event_counts['heel'] = len(heel_l_times)
+#         left_event_counts['toe'] = len(m1_l_releases)
+        
+#         stance_l, swing_l, stride_l = calculate_gait_parameters(heel_l_times, m1_l_releases)
+#         if stance_l and swing_l and stride_l:
+#             s_l_s = scale_to_physiological_range(stance_l, STANCE_RANGE)
+#             sw_l_s = scale_to_physiological_range(swing_l, SWING_RANGE)
+#             stride_l_s = scale_to_physiological_range(stride_l, STRIDE_RANGE)
+#             speed_l, cadence_l, step_l = calculate_spatial_temporal_params(stride_l_s, total_time)
+#             left_params = [
+#                 float(np.mean(s_l_s)) if s_l_s else 0.0,
+#                 float(np.mean(sw_l_s)) if sw_l_s else 0.0,
+#                 float(np.mean(stride_l_s)) if stride_l_s else 0.0,
+#                 speed_l, cadence_l, step_l
+#             ]
+
+#     # 5. Asymmetry analysis
+#     asym = {
+#         'stance_LR_ratio': safe_ratio(left_params[0], right_params[0]),
+#         'swing_LR_ratio': safe_ratio(left_params[1], right_params[1]),
+#         'stride_LR_ratio': safe_ratio(left_params[2], right_params[2])
+#     }
+#     ratios = [v for v in asym.values() if v is not None and not np.isnan(v)]
+#     avg_dev = float(np.mean([abs(r-1.0) for r in ratios])) if ratios else None
+#     asym['avg_deviation'] = avg_dev
+    
+#     if avg_dev is None or not ratios:
+#         asym['symmetry_flag'] = "INSUFFICIENT_DATA"
+#     elif avg_dev < 0.05:
+#         asym['symmetry_flag'] = "SYMMETRIC"
+#     else:
+#         asym['symmetry_flag'] = "ASYMMETRIC"
+
+#     # 6. Health classification (using GLOBAL model)
+#     classification = {'label': None, 'confidence': None}
+#     if sum(right_params)>0 and sum(left_params)>0 and GLOBAL_CLF is not None:
+#         avg_params = [(l+r)/2.0 for l,r in zip(left_params, right_params)]
+        
+#         # Use user-provided demographics for classification
+#         features = [age, height, weight] + avg_params
+        
+#         # Scaling and Prediction
+#         Xs = GLOBAL_SCALER.transform([features])
+#         pred = GLOBAL_CLF.predict(Xs)[0]
+#         prob = float(np.max(GLOBAL_CLF.predict_proba(Xs)[0]))
+#         classification = {'label': str(pred), 'confidence': prob}
+
+#     # 7. Assemble comprehensive results
+#     metadata = {
+#         'recording_time_ms': float(total_time),
+#         'dynamic_rows_kept': int(len(df_use)),
+#         'total_rows': int(len(df)),
+#         'dynamic_filter_used': used_dynamic,
+#         'peak_detection_threshold': peak_height,
+#         'dynamic_filter_threshold': dynamic_threshold,
+#         'subject_demographics': {'age': age, 'height': height, 'weight': weight}
+#     }
+    
+#     right_peak_means = [v['peak_mean'] for k,v in peak_stats.items() 
+#                        if ('R' in k or 'Right' in k) and v['peak_mean'] is not None]
+#     left_peak_means = [v['peak_mean'] for k,v in peak_stats.items() 
+#                       if ('L' in k or 'Left' in k) and v['peak_mean'] is not None]
+    
+#     per_side_summary = {
+#         'right_mean_peak': float(np.mean(right_peak_means)) if right_peak_means else None,
+#         'left_mean_peak': float(np.mean(left_peak_means)) if left_peak_means else None,
+#         'dynamic_fraction': float(len(df_use)/len(df)) if len(df)>0 else None
+#     }
+    
+#     gait_parameters = {
+#         'right': {
+#             'stance_mean_ms': right_params[0] if right_params[0]>0 else None,
+#             'swing_mean_ms': right_params[1] if right_params[1]>0 else None,
+#             'stride_mean_ms': right_params[2] if right_params[2]>0 else None,
+#             'speed_m_s': right_params[3] if right_params[3]>0 else None,
+#             'cadence_spm': right_params[4] if right_params[4]>0 else None,
+#             'step_length_m': right_params[5] if right_params[5]>0 else None,
+#             'heel_strike_count': right_event_counts['heel'],
+#             'toe_off_count': right_event_counts['toe']
+#         },
+#         'left': {
+#             'stance_mean_ms': left_params[0] if left_params[0]>0 else None,
+#             'swing_mean_ms': left_params[1] if left_params[1]>0 else None,
+#             'stride_mean_ms': left_params[2] if left_params[2]>0 else None,
+#             'speed_m_s': left_params[3] if left_params[3]>0 else None,
+#             'cadence_spm': left_params[4] if left_params[4]>0 else None,
+#             'step_length_m': left_params[5] if left_params[5]>0 else None,
+#             'heel_strike_count': left_event_counts['heel'],
+#             'toe_off_count': left_event_counts['toe']
+#         }
+#     }
+    
+#     results = {
+#         'metadata': metadata,
+#         'per_sensor': peak_stats,
+#         'per_side_summary': per_side_summary,
+#         'gait_parameters': gait_parameters,
+#         'asymmetry': asym,
+#         'classification': classification,
+#         'notes': {
+#             'column_mapping': column_mapping_report,
+#             # 'column_mapping': mapping,
+#             'dynamic_filter_used': used_dynamic,
+#             'classifier_warning': 'Using synthetic training data - replace with real patient database before clinical use' if GLOBAL_CLF else 'Classification failed due to model training error.'
+#         }
+#     }
+    
+#     # Convert numpy types to standard Python types for JSON serialization
+#     return json.loads(json.dumps(results))
+
 def run_gait_analysis_core(df, age: float, height: float, weight: float, 
                                  peak_height: float, dynamic_threshold: float, no_dynamic: bool, column_mapping_report: dict):
-    """
-    Core analysis logic directly adapted from combined.py:main, minus side-effects (plotting/saving).
-    """
+    # This version assumes the DataFrame has already been renamed to the CANONICAL_COLUMNS array
     
-    # 1. Column Mapping and Preparation (Matching logic from original main)
-    mapping = {}
-    for key, cand in COLUMN_ALIASES.items():
-        found = find_column(df, cand)
-        mapping[key] = found
-    
-    if mapping['time'] is None:
-        raise ValueError("Cannot find time column. Check your CSV header for time alias.")
-    
-    rename_map = {}
-    rename_map[mapping['time']] = 'Time(ms)'
-    for logical in ['M1_R','M2_R','Mid_R','Heel_R','M1_L','M2_L','Mid_L','Heel_L']:
-        actual_col = mapping.get(logical)
-        if actual_col is not None:
-            canonical = logical + '(kPa)'
-            rename_map[actual_col] = canonical
-    
-    df = df.rename(columns=rename_map)
-    
-    # Ensure Time(ms) numeric and handle NaNs/errors
+    # 1. Preparation
     df['Time(ms)'] = pd.to_numeric(df['Time(ms)'], errors='coerce').ffill().fillna(0)
-
     sensor_cols = [c for c in ['M1_R(kPa)','M2_R(kPa)','Mid_R(kPa)','Heel_R(kPa)',
                                'M1_L(kPa)','M2_L(kPa)','Mid_L(kPa)','Heel_L(kPa)'] if c in df.columns]
 
-    # 2. Dynamic Filtering (Matching logic from original main)
+    # 2. Dynamic Filtering (Use original logic)
     df_use = df.copy()
     used_dynamic = False
     if not no_dynamic:
         df_use, used_dynamic = keep_dynamic(df, sensor_cols, threshold=dynamic_threshold)
     
-    if len(df_use) < 10:
-        raise ValueError("Too few valid rows after data cleaning/filtering.")
-    
+    if len(df_use) < 10: raise ValueError("Too few valid rows after data cleaning/filtering.")
     total_time = float(df_use['Time(ms)'].iloc[-1] - df_use['Time(ms)'].iloc[0]) if len(df_use)>1 else 0.0
 
-    # 3. Per-sensor peak statistics (Code 1/2 parameters: a,b,c type)
+    # 3. Per-sensor peak statistics
     peak_stats = compute_per_sensor_peak_stats(df_use, sensor_cols, peak_height_mult=peak_height)
     
-    # VALIDATION 2 (from original main logic)
-    total_peaks = sum(v.get('peak_count', 0) for v in peak_stats.values())
-    if total_peaks == 0:
-        # Instead of error/exit, return with warning in results
-        pass
+    # 4. Gait Events & Parameters (Use original logic)
+    right_params = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]; left_params  = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    right_event_counts = {'heel': 0, 'toe': 0}; left_event_counts = {'heel': 0, 'toe': 0}
     
-    # 4. Gait Events & Parameters (Final Code x,y,z parameters)
-    right_params = [0,0,0,0,0,0] # Stance, Swing, Stride, Speed, Cadence, StepLength
-    left_params  = [0,0,0,0,0,0]
-    right_event_counts = {'heel': 0, 'toe': 0}
-    left_event_counts = {'heel': 0, 'toe': 0}
-    
-    # RIGHT FOOT
+    # RIGHT FOOT (Uses canonical names)
     if 'Heel_R(kPa)' in df_use.columns and 'M1_R(kPa)' in df_use.columns:
         heel_r_times, m1_r_releases = detect_gait_events(df_use, 'Heel_R(kPa)', 'M1_R(kPa)')
-        right_event_counts['heel'] = len(heel_r_times)
-        right_event_counts['toe'] = len(m1_r_releases)
-        
+        right_event_counts['heel'] = len(heel_r_times); right_event_counts['toe'] = len(m1_r_releases)
         stance_r, swing_r, stride_r = calculate_gait_parameters(heel_r_times, m1_r_releases)
         if stance_r and swing_r and stride_r:
-            s_r_s = scale_to_physiological_range(stance_r, STANCE_RANGE)
-            sw_r_s = scale_to_physiological_range(swing_r, SWING_RANGE)
+            s_r_s = scale_to_physiological_range(stance_r, STANCE_RANGE); sw_r_s = scale_to_physiological_range(swing_r, SWING_RANGE)
             stride_r_s = scale_to_physiological_range(stride_r, STRIDE_RANGE)
             speed_r, cadence_r, step_r = calculate_spatial_temporal_params(stride_r_s, total_time)
-            right_params = [
-                float(np.mean(s_r_s)) if s_r_s else 0.0,
-                float(np.mean(sw_r_s)) if sw_r_s else 0.0,
-                float(np.mean(stride_r_s)) if stride_r_s else 0.0,
-                speed_r, cadence_r, step_r
-            ]
+            right_params = [np.mean(s_r_s), np.mean(sw_r_s), np.mean(stride_r_s), speed_r, cadence_r, step_r]
 
-    # LEFT FOOT
+    # LEFT FOOT (Uses canonical names)
     if 'Heel_L(kPa)' in df_use.columns and 'M1_L(kPa)' in df_use.columns:
         heel_l_times, m1_l_releases = detect_gait_events(df_use, 'Heel_L(kPa)', 'M1_L(kPa)')
-        left_event_counts['heel'] = len(heel_l_times)
-        left_event_counts['toe'] = len(m1_l_releases)
-        
+        left_event_counts['heel'] = len(heel_l_times); left_event_counts['toe'] = len(m1_l_releases)
         stance_l, swing_l, stride_l = calculate_gait_parameters(heel_l_times, m1_l_releases)
         if stance_l and swing_l and stride_l:
-            s_l_s = scale_to_physiological_range(stance_l, STANCE_RANGE)
-            sw_l_s = scale_to_physiological_range(swing_l, SWING_RANGE)
+            s_l_s = scale_to_physiological_range(stance_l, STANCE_RANGE); sw_l_s = scale_to_physiological_range(swing_l, SWING_RANGE)
             stride_l_s = scale_to_physiological_range(stride_l, STRIDE_RANGE)
             speed_l, cadence_l, step_l = calculate_spatial_temporal_params(stride_l_s, total_time)
-            left_params = [
-                float(np.mean(s_l_s)) if s_l_s else 0.0,
-                float(np.mean(sw_l_s)) if sw_l_s else 0.0,
-                float(np.mean(stride_l_s)) if stride_l_s else 0.0,
-                speed_l, cadence_l, step_l
-            ]
+            left_params = [np.mean(s_l_s), np.mean(sw_l_s), np.mean(stride_l_s), speed_l, cadence_l, step_l]
 
     # 5. Asymmetry analysis
-    asym = {
-        'stance_LR_ratio': safe_ratio(left_params[0], right_params[0]),
-        'swing_LR_ratio': safe_ratio(left_params[1], right_params[1]),
-        'stride_LR_ratio': safe_ratio(left_params[2], right_params[2])
-    }
+    asym = {'stance_LR_ratio': safe_ratio(left_params[0], right_params[0]), 'swing_LR_ratio': safe_ratio(left_params[1], right_params[1]), 'stride_LR_ratio': safe_ratio(left_params[2], right_params[2])}
     ratios = [v for v in asym.values() if v is not None and not np.isnan(v)]
     avg_dev = float(np.mean([abs(r-1.0) for r in ratios])) if ratios else None
     asym['avg_deviation'] = avg_dev
-    
-    if avg_dev is None or not ratios:
-        asym['symmetry_flag'] = "INSUFFICIENT_DATA"
-    elif avg_dev < 0.05:
-        asym['symmetry_flag'] = "SYMMETRIC"
-    else:
-        asym['symmetry_flag'] = "ASYMMETRIC"
+    asym['symmetry_flag'] = "SYMMETRIC" if avg_dev is not None and avg_dev < 0.05 else ("ASYMMETRIC" if avg_dev is not None else "INSUFFICIENT_DATA")
 
-    # 6. Health classification (using GLOBAL model)
-    classification = {'label': None, 'confidence': None}
+    # 6. Health classification
+    classification = {'label': "INSUFFICIENT_DATA", 'confidence': 0.0}
     if sum(right_params)>0 and sum(left_params)>0 and GLOBAL_CLF is not None:
         avg_params = [(l+r)/2.0 for l,r in zip(left_params, right_params)]
-        
-        # Use user-provided demographics for classification
-        features = [age, height, weight] + avg_params
-        
-        # Scaling and Prediction
+        features = [age, height, weight] + [float(p) for p in avg_params]
         Xs = GLOBAL_SCALER.transform([features])
-        pred = GLOBAL_CLF.predict(Xs)[0]
-        prob = float(np.max(GLOBAL_CLF.predict_proba(Xs)[0]))
+        pred = GLOBAL_CLF.predict(Xs)[0]; prob = float(np.max(GLOBAL_CLF.predict_proba(Xs)[0]))
         classification = {'label': str(pred), 'confidence': prob}
 
     # 7. Assemble comprehensive results
-    metadata = {
-        'recording_time_ms': float(total_time),
-        'dynamic_rows_kept': int(len(df_use)),
-        'total_rows': int(len(df)),
-        'dynamic_filter_used': used_dynamic,
-        'peak_detection_threshold': peak_height,
-        'dynamic_filter_threshold': dynamic_threshold,
-        'subject_demographics': {'age': age, 'height': height, 'weight': weight}
-    }
-    
-    right_peak_means = [v['peak_mean'] for k,v in peak_stats.items() 
-                       if ('R' in k or 'Right' in k) and v['peak_mean'] is not None]
-    left_peak_means = [v['peak_mean'] for k,v in peak_stats.items() 
-                      if ('L' in k or 'Left' in k) and v['peak_mean'] is not None]
-    
-    per_side_summary = {
-        'right_mean_peak': float(np.mean(right_peak_means)) if right_peak_means else None,
-        'left_mean_peak': float(np.mean(left_peak_means)) if left_peak_means else None,
-        'dynamic_fraction': float(len(df_use)/len(df)) if len(df)>0 else None
-    }
-    
+    metadata = {'recording_time_ms': float(total_time), 'dynamic_rows_kept': int(len(df_use)), 'total_rows': int(len(df)), 'dynamic_filter_used': used_dynamic, 'peak_detection_threshold': peak_height, 'dynamic_filter_threshold': dynamic_threshold, 'subject_demographics': {'age': age, 'height': height, 'weight': weight}}
+    right_peak_means = [v['peak_mean'] for k,v in peak_stats.items() if ('R' in k) and v['peak_mean'] is not None]
+    left_peak_means = [v['peak_mean'] for k,v in peak_stats.items() if ('L' in k) and v['peak_mean'] is not None]
+    per_side_summary = {'right_mean_peak': float(np.mean(right_peak_means)) if right_peak_means else None, 'left_mean_peak': float(np.mean(left_peak_means)) if left_peak_means else None, 'dynamic_fraction': float(len(df_use)/len(df)) if len(df)>0 else None}
     gait_parameters = {
-        'right': {
-            'stance_mean_ms': right_params[0] if right_params[0]>0 else None,
-            'swing_mean_ms': right_params[1] if right_params[1]>0 else None,
-            'stride_mean_ms': right_params[2] if right_params[2]>0 else None,
-            'speed_m_s': right_params[3] if right_params[3]>0 else None,
-            'cadence_spm': right_params[4] if right_params[4]>0 else None,
-            'step_length_m': right_params[5] if right_params[5]>0 else None,
-            'heel_strike_count': right_event_counts['heel'],
-            'toe_off_count': right_event_counts['toe']
-        },
-        'left': {
-            'stance_mean_ms': left_params[0] if left_params[0]>0 else None,
-            'swing_mean_ms': left_params[1] if left_params[1]>0 else None,
-            'stride_mean_ms': left_params[2] if left_params[2]>0 else None,
-            'speed_m_s': left_params[3] if left_params[3]>0 else None,
-            'cadence_spm': left_params[4] if left_params[4]>0 else None,
-            'step_length_m': left_params[5] if left_params[5]>0 else None,
-            'heel_strike_count': left_event_counts['heel'],
-            'toe_off_count': left_event_counts['toe']
-        }
-    }
+        'right': {'stance_mean_ms': float(right_params[0]) if right_params[0]>0 else None, 'swing_mean_ms': float(right_params[1]) if right_params[1]>0 else None, 'stride_mean_ms': float(right_params[2]) if right_params[2]>0 else None, 'speed_m_s': float(right_params[3]) if right_params[3]>0 else None, 'cadence_spm': float(right_params[4]) if right_params[4]>0 else None, 'step_length_m': float(right_params[5]) if right_params[5]>0 else None, 'heel_strike_count': right_event_counts['heel'], 'toe_off_count': right_event_counts['toe']},
+        'left': {'stance_mean_ms': float(left_params[0]) if left_params[0]>0 else None, 'swing_mean_ms': float(left_params[1]) if left_params[1]>0 else None, 'stride_mean_ms': float(left_params[2]) if left_params[2]>0 else None, 'speed_m_s': float(left_params[3]) if left_params[3]>0 else None, 'cadence_spm': float(left_params[4]) if left_params[4]>0 else None, 'step_length_m': float(left_params[5]) if left_params[5]>0 else None, 'heel_strike_count': left_event_counts['heel'], 'toe_off_count': left_event_counts['toe']}}
     
     results = {
-        'metadata': metadata,
-        'per_sensor': peak_stats,
-        'per_side_summary': per_side_summary,
-        'gait_parameters': gait_parameters,
-        'asymmetry': asym,
-        'classification': classification,
-        'notes': {
-            'column_mapping': column_mapping_report,
-            # 'column_mapping': mapping,
-            'dynamic_filter_used': used_dynamic,
-            'classifier_warning': 'Using synthetic training data - replace with real patient database before clinical use' if GLOBAL_CLF else 'Classification failed due to model training error.'
-        }
+        'metadata': metadata, 'per_sensor': peak_stats, 'per_side_summary': per_side_summary,
+        'gait_parameters': gait_parameters, 'asymmetry': asym, 'classification': classification,
+        'notes': {'column_mapping': column_mapping_report, 'dynamic_filter_used': used_dynamic, 'classifier_warning': 'Using synthetic training data - replace with real patient database before clinical use' if GLOBAL_CLF else 'Classification failed due to model training error.'}
     }
     
-    # Convert numpy types to standard Python types for JSON serialization
     return json.loads(json.dumps(results))
+
+
+
 
 
 @app.post("/analyze-gait/")
@@ -1050,31 +1157,31 @@ async def analyze_gait_endpoint(
         # 1. Read the uploaded file into a pandas DataFrame
         contents = await file.read()
         df = pd.read_csv(BytesIO(contents))
-
-        # --- NEW STEP: MANUAL COLUMN RENAMING AND REPORTING ---
-        column_mapping_report = {}
-        df_columns = list(df.columns)
         
-        # Create the actual rename map and the report simultaneously
-        actual_rename_map = {}
-        for original_name, canonical_name in DIRECT_RENAME_MAP.items():
-            if original_name in df_columns:
-                actual_rename_map[original_name] = canonical_name
-                # Create the report entry: 'logical_name' -> 'Original_Name'
-                if canonical_name == 'Time(ms)':
-                    column_mapping_report['time'] = original_name
-                elif canonical_name.endswith('(kPa)'):
-                    column_mapping_report[canonical_name.replace('(kPa)', '')] = original_name
+        # --- NEW STEP: POSITIONAL COLUMN RENAMING AND REPORTING ---
+        
+        # 1.1 Check number of columns
+        if len(df.columns) != len(CANONICAL_COLUMNS):
+            raise ValueError(f"CSV has {len(df.columns)} columns, but 10 were expected based on the known format.")
 
-        # Perform the rename
-        df = df.rename(columns=actual_rename_map)
-
-        # Complete the report with any missing logical names (to show null/N/A)
-        ALL_LOGICAL_KEYS = ['time', 'M1_R', 'M2_R', 'Mid_R', 'Heel_R', 'M1_L', 'M2_L', 'Mid_L', 'Heel_L']
-        for key in ALL_LOGICAL_KEYS:
-            if key not in column_mapping_report:
-                column_mapping_report[key] = None
-        # --- END NEW STEP ---
+        # 1.2 Create the rename map (Original Header -> Canonical Name) and the report
+        rename_map = {}
+        column_mapping_report = {}
+        
+        for i, original_name in enumerate(df.columns):
+            canonical_name = CANONICAL_COLUMNS[i]
+            rename_map[original_name] = canonical_name
+            
+            # Create report entry: 'logical_name' -> 'Original_Name'
+            if canonical_name == 'Time(ms)':
+                column_mapping_report['time'] = original_name
+            elif canonical_name.endswith('(kPa)'):
+                column_mapping_report[canonical_name.replace('(kPa)', '')] = original_name
+            elif canonical_name == 'CurrentTimeStamps':
+                 pass # Keep out of report as it's not used by analysis core metrics
+        
+        # 1.3 Perform the rename
+        df = df.rename(columns=rename_map)
 
         # 2. Run the core analysis logic
         results = run_gait_analysis_core(
@@ -1085,7 +1192,7 @@ async def analyze_gait_endpoint(
             peak_height=peak_height_multiplier,
             dynamic_threshold=dynamic_filter_threshold,
             no_dynamic=disable_dynamic_filter,
-            column_mapping_report=column_mapping_report
+            column_mapping_report=column_mapping_report # PASS THE REPORT HERE
         )
 
         # 3. Return the comprehensive results as JSON
