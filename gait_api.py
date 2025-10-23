@@ -827,7 +827,7 @@ except Exception as e:
 app = FastAPI()
 
 def run_gait_analysis_core(df, age: float, height: float, weight: float, 
-                                 peak_height: float, dynamic_threshold: float, no_dynamic: bool):
+                                 peak_height: float, dynamic_threshold: float, no_dynamic: bool, column_mapping_report: dict):
     """
     Core analysis logic directly adapted from combined.py:main, minus side-effects (plotting/saving).
     """
@@ -1005,7 +1005,8 @@ def run_gait_analysis_core(df, age: float, height: float, weight: float,
         'asymmetry': asym,
         'classification': classification,
         'notes': {
-            'column_mapping': mapping,
+            'column_mapping': column_mapping_report,
+            # 'column_mapping': mapping,
             'dynamic_filter_used': used_dynamic,
             'classifier_warning': 'Using synthetic training data - replace with real patient database before clinical use' if GLOBAL_CLF else 'Classification failed due to model training error.'
         }
@@ -1036,6 +1037,31 @@ async def analyze_gait_endpoint(
         contents = await file.read()
         df = pd.read_csv(BytesIO(contents))
 
+        # --- NEW STEP: MANUAL COLUMN RENAMING AND REPORTING ---
+        column_mapping_report = {}
+        df_columns = list(df.columns)
+        
+        # Create the actual rename map and the report simultaneously
+        actual_rename_map = {}
+        for original_name, canonical_name in DIRECT_RENAME_MAP.items():
+            if original_name in df_columns:
+                actual_rename_map[original_name] = canonical_name
+                # Create the report entry: 'logical_name' -> 'Original_Name'
+                if canonical_name == 'Time(ms)':
+                    column_mapping_report['time'] = original_name
+                elif canonical_name.endswith('(kPa)'):
+                    column_mapping_report[canonical_name.replace('(kPa)', '')] = original_name
+
+        # Perform the rename
+        df = df.rename(columns=actual_rename_map)
+
+        # Complete the report with any missing logical names (to show null/N/A)
+        ALL_LOGICAL_KEYS = ['time', 'M1_R', 'M2_R', 'Mid_R', 'Heel_R', 'M1_L', 'M2_L', 'Mid_L', 'Heel_L']
+        for key in ALL_LOGICAL_KEYS:
+            if key not in column_mapping_report:
+                column_mapping_report[key] = None
+        # --- END NEW STEP ---
+
         # 2. Run the core analysis logic
         results = run_gait_analysis_core(
             df, 
@@ -1044,7 +1070,8 @@ async def analyze_gait_endpoint(
             float(weight), 
             peak_height=peak_height_multiplier,
             dynamic_threshold=dynamic_filter_threshold,
-            no_dynamic=disable_dynamic_filter
+            no_dynamic=disable_dynamic_filter,
+            column_mapping_report=column_mapping_report
         )
 
         # 3. Return the comprehensive results as JSON
