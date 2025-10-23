@@ -832,28 +832,39 @@ def run_gait_analysis_core(df, age: float, height: float, weight: float,
     Core analysis logic directly adapted from combined.py:main, minus side-effects (plotting/saving).
     """
     
-    # 1. Column Mapping and Preparation (Matching logic from original main)
+    # --- 1. MANUAL Column Renaming and Preparation (Replaces original alias finder) ---
+
+    # 1.1 Create the actual rename map (only for columns present in the DataFrame)
+    actual_rename_map = {
+        old_col: MANDATORY_RENAME_MAP[old_col]
+        for old_col in df.columns if old_col in MANDATORY_RENAME_MAP
+    }
+    
+    # 1.2 Perform the rename
+    df = df.rename(columns=actual_rename_map)
+
+    # 1.3 Manually build the column_mapping for the NOTES section (Reports changes)
     mapping = {}
-    for key, cand in COLUMN_ALIASES.items():
-        found = find_column(df, cand)
-        mapping[key] = found
+    for original_name, canonical_name in actual_rename_map.items():
+        if canonical_name == 'Time(ms)':
+            mapping['time'] = original_name
+        elif canonical_name.endswith('(kPa)'):
+            logical_key = canonical_name.replace('(kPa)', '')
+            mapping[logical_key] = original_name
+            
+    ALL_LOGICAL_KEYS = ['time', 'M1_R', 'M2_R', 'Mid_R', 'Heel_R', 'M1_L', 'M2_L', 'Mid_L', 'Heel_L']
+    for key in ALL_LOGICAL_KEYS:
+        if key not in mapping:
+            mapping[key] = None
+
     
-    if mapping['time'] is None:
-        raise ValueError("Cannot find time column. Check your CSV header for time alias.")
-    
-    rename_map = {}
-    rename_map[mapping['time']] = 'Time(ms)'
-    for logical in ['M1_R','M2_R','Mid_R','Heel_R','M1_L','M2_L','Mid_L','Heel_L']:
-        actual_col = mapping.get(logical)
-        if actual_col is not None:
-            canonical = logical + '(kPa)'
-            rename_map[actual_col] = canonical
-    
-    df = df.rename(columns=rename_map)
-    
-    # Ensure Time(ms) numeric and handle NaNs/errors
+    # 1.4 Ensure Time(ms) numeric and handle NaNs/errors
+    if 'Time(ms)' not in df.columns:
+         raise ValueError("Time column ('Time(ms)') not found after renaming.")
+         
     df['Time(ms)'] = pd.to_numeric(df['Time(ms)'], errors='coerce').ffill().fillna(0)
 
+    # 1.5 Re-build sensor_cols using the *canonical* names
     sensor_cols = [c for c in ['M1_R(kPa)','M2_R(kPa)','Mid_R(kPa)','Heel_R(kPa)',
                                'M1_L(kPa)','M2_L(kPa)','Mid_L(kPa)','Heel_L(kPa)'] if c in df.columns]
 
@@ -1013,6 +1024,24 @@ def run_gait_analysis_core(df, age: float, height: float, weight: float,
     
     # Convert numpy types to standard Python types for JSON serialization
     return json.loads(json.dumps(results))
+
+
+# --- Define the Mandatory Rename Map globally in your Python file ---
+
+# CRITICAL: Define the exact mapping from your test file headers to the CANONICAL names
+# This list is based on your provided test file headers (suraj 12345.csv).
+MANDATORY_RENAME_MAP = {
+    "CurrentTimeStamps": "CurrentTimeStamps", 
+    "Time Difference in Milliseconds": "Time(ms)", # Canonical time
+    "LEFT_1 M1": "M1_L(kPa)",
+    "LEFT_1 M2": "M2_L(kPa)",
+    "LEFT_1 Middle": "Mid_L(kPa)",
+    "LEFT_1 Heel": "Heel_L(kPa)",
+    "Right1 M1": "M1_R(kPa)",
+    "Right1 M2": "M2_R(kPa)",
+    "Right1 Middle": "Mid_R(kPa)",
+    "Right1 Heel": "Heel_R(kPa)",
+}
 
 
 @app.post("/analyze-gait/")
