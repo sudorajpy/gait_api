@@ -558,6 +558,20 @@ COLUMN_ALIASES = {
     'Heel_L': ['Heel_L(kPa)', 'Left1 Heel', 'Left_Heel', 'Heel_L', 'Left Heel'],
 }
 
+
+DIRECT_RENAME_MAP = {
+    "CurrentTimeStamps": "CurrentTimeStamps", 
+    "Time Difference in Milliseconds": "Time(ms)", # Canonical time
+    "LEFT_1 M1": "M1_L(kPa)",
+    "LEFT_1 M2": "M2_L(kPa)",
+    "LEFT_1 Middle": "Mid_L(kPa)",
+    "LEFT_1 Heel": "Heel_L(kPa)",
+    "Right1 M1": "M1_R(kPa)",
+    "Right1 M2": "M2_R(kPa)",
+    "Right1 Middle": "Mid_R(kPa)",
+    "Right1 Heel": "Heel_R(kPa)",
+}
+
 def find_column(df, candidates):
     for c in candidates:
         if c in df.columns:
